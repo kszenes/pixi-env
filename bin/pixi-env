@@ -15,7 +15,7 @@ Usage:
   pixi-env remove -n <name>                Delete an environment
   pixi-env list                            List environments
   pixi-env path [-n <name>]                Print global env root or environment path
-  pixi-env activate -n <name>              Activate an environment (after shell init)
+  pixi-env activate <name>                 Activate an environment (after shell init)
   pixi-env deactivate                      Deactivate the active environment
   pixi-env run -n <name> -- <command>      Run a command in an environment
   pixi-env shell-init                      Print shell integration for bash/zsh
@@ -23,7 +23,7 @@ Usage:
 Pixi wrapper after shell-init:
   pixi env create -n <name> [pkg ...]
   pixi env list
-  pixi env activate -n <name>
+  pixi env activate <name>
   pixi env deactivate
   pixi env add [-n <name>] <pkg ...>
   pixi env remove -n <name>
@@ -124,7 +124,7 @@ cmd_add() {
   elif [[ -n "${PIXI_ENV_ACTIVE_ENV:-}" ]]; then
     name="$PIXI_ENV_ACTIVE_ENV"
   else
-    die "usage: pixi-env add [-n <name>] <package ...> (or activate an env first: pixi-env activate -n <name>)"
+    die "usage: pixi-env add [-n <name>] <package ...> (or activate an env first: pixi-env activate <name>)"
   fi
   ensure_env_exists "$name"
   pixi add --manifest-path "$(manifest_for "$name")" "$@"
@@ -175,10 +175,8 @@ cmd_path() {
 }
 
 emit_activate() {
-  parse_name_flag "$@"
-  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
-  [[ -n "$PARSED_NAME" && $# -eq 0 ]] || die "usage: pixi-env activate -n <name>"
-  local name="$PARSED_NAME"
+  [[ $# -eq 1 && "${1:-}" != "-n" && "${1:-}" != "--name" ]] || die "usage: pixi-env activate <name>"
+  local name="$1"
   need_pixi
   local dir prefix
   ensure_env_exists "$name"
@@ -234,10 +232,8 @@ EOF
 }
 
 cmd_activate_standalone() {
-  parse_name_flag "$@"
-  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
-  [[ -n "$PARSED_NAME" && $# -eq 0 ]] || die "usage: pixi-env activate -n <name>"
-  local name="$PARSED_NAME"
+  [[ $# -eq 1 && "${1:-}" != "-n" && "${1:-}" != "--name" ]] || die "usage: pixi-env activate <name>"
+  local name="$1"
   cat >&2 <<EOF
 pixi-env activate must be evaluated by your shell.
 
@@ -245,7 +241,7 @@ One-time setup for bash/zsh:
   eval "\$(pixi-env shell-init)"
 
 Then run:
-  pixi-env activate -n $name
+  pixi-env activate $name
 EOF
 }
 

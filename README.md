@@ -28,7 +28,7 @@ Add that line to `~/.bashrc` or `~/.zshrc` to make it permanent.
 ```sh
 pixi env create -n py311 python=3.11 numpy
 pixi env list
-pixi env activate -n py311
+pixi env activate py311
 python --version
 pixi env deactivate
 ```
@@ -49,7 +49,7 @@ pixi env remove -n py311
 
 ```sh
 pixi-env create -n py311 python=3.11
-pixi-env activate -n py311
+pixi-env activate py311
 ```
 
 ## Notes
