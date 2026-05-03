@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PIXI_ENV_VERSION="0.1.0"
+PIXI_ENV_HOME_DEFAULT="${HOME}/.pixi-envs"
+PIXI_ENV_HOME="${PIXI_ENV_HOME:-${PIXIGLOBAL_HOME:-$PIXI_ENV_HOME_DEFAULT}}"
+
+usage() {
+  cat <<'EOF'
+pixi-env - pixi global environments
+
+Usage:
+  pixi-env create -n <name> [package ...]  Create a global pixi environment
+  pixi-env add [-n <name>] <package ...>   Add packages to an environment (or active env)
+  pixi-env remove -n <name>                Delete an environment
+  pixi-env list                            List environments
+  pixi-env path [-n <name>]                Print global env root or environment path
+  pixi-env activate -n <name>              Activate an environment (after shell init)
+  pixi-env deactivate                      Deactivate the active environment
+  pixi-env run -n <name> -- <command>      Run a command in an environment
+  pixi-env shell-init                      Print shell integration for bash/zsh
+
+Pixi wrapper after shell-init:
+  pixi env create -n <name> [pkg ...]
+  pixi env list
+  pixi env activate -n <name>
+  pixi env deactivate
+  pixi env add [-n <name>] <pkg ...>
+  pixi env remove -n <name>
+  pixi env path [-n <name>]
+  pixi env run -n <name> -- <cmd>
+  pixi-env help                            Show this help
+
+Environment variables:
+  PIXI_ENV_HOME                            Directory where environments are stored
+                                     (default: ~/.pixi-envs)
+
+Install shell integration by adding this to ~/.bashrc or ~/.zshrc:
+  eval "$(pixi-env shell-init)"
+EOF
+}
+
+err() { echo "pixi-env: $*" >&2; }
+die() { err "$*"; exit 1; }
+need_pixi() { command -v pixi >/dev/null 2>&1 || die "pixi not found in PATH"; }
+
+valid_name() {
+  [[ "${1:-}" =~ ^[A-Za-z0-9._-]+$ ]] && [[ "$1" != "." ]] && [[ "$1" != ".." ]]
+}
+
+env_dir() {
+  local name="$1"
+  valid_name "$name" || die "invalid environment name '$name' (use letters, digits, '.', '_' or '-')"
+  printf '%s/%s\n' "$PIXI_ENV_HOME" "$name"
+}
+
+manifest_for() { printf '%s/pixi.toml\n' "$(env_dir "$1")"; }
+
+env_prefix_for_dir() {
+  local dir="$1"
+  printf '%s/.pixi/envs/default\n' "$dir"
+}
+
+ensure_env_exists() {
+  local name="$1" dir
+  dir="$(env_dir "$name")"
+  [[ -f "$dir/pixi.toml" ]] || die "environment '$name' does not exist"
+}
+
+PARSED_NAME=""
+PARSED_ARGS=()
+parse_name_flag() {
+  PARSED_NAME=""
+  PARSED_ARGS=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--name)
+        shift
+        [[ $# -gt 0 ]] || die "-n/--name requires an environment name"
+        PARSED_NAME="$1"
+        shift
+        ;;
+      --)
+        PARSED_ARGS+=("--")
+        shift
+        PARSED_ARGS+=("$@")
+        break
+        ;;
+      *)
+        PARSED_ARGS+=("$1")
+        shift
+        ;;
+    esac
+  done
+}
+
+cmd_create() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  [[ -n "$PARSED_NAME" ]] || die "usage: pixi-env create -n <name> [package ...]"
+  local name="$PARSED_NAME"
+  need_pixi
+  local dir
+  dir="$(env_dir "$name")"
+  [[ ! -e "$dir" ]] || die "environment '$name' already exists: $dir"
+  mkdir -p "$PIXI_ENV_HOME"
+  pixi init "$dir"
+  if [[ $# -gt 0 ]]; then
+    pixi add --manifest-path "$dir/pixi.toml" "$@"
+  else
+    pixi install --manifest-path "$dir/pixi.toml"
+  fi
+  echo "Created '$name' at $dir"
+}
+
+cmd_add() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  [[ $# -ge 1 ]] || die "usage: pixi-env add [-n <name>] <package ...>"
+  need_pixi
+  local name
+  if [[ -n "$PARSED_NAME" ]]; then
+    name="$PARSED_NAME"
+  elif [[ -n "${PIXI_ENV_ACTIVE_ENV:-}" ]]; then
+    name="$PIXI_ENV_ACTIVE_ENV"
+  else
+    die "usage: pixi-env add [-n <name>] <package ...> (or activate an env first: pixi-env activate -n <name>)"
+  fi
+  ensure_env_exists "$name"
+  pixi add --manifest-path "$(manifest_for "$name")" "$@"
+}
+
+cmd_remove() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  [[ -n "$PARSED_NAME" && $# -eq 0 ]] || die "usage: pixi-env remove -n <name>"
+  local name="$PARSED_NAME"
+  local dir
+  ensure_env_exists "$name"
+  dir="$(env_dir "$name")"
+  rm -rf -- "$dir"
+  echo "Removed '$name'"
+}
+
+cmd_list() {
+  mkdir -p "$PIXI_ENV_HOME"
+  local found=0 dir name prefix marker
+  for dir in "$PIXI_ENV_HOME"/*; do
+    [[ -d "$dir" && -f "$dir/pixi.toml" ]] || continue
+    found=1
+    name="$(basename "$dir")"
+    prefix="$(env_prefix_for_dir "$dir")"
+    marker=" "
+    [[ "${PIXI_ENV_ACTIVE_ENV:-}" == "$name" ]] && marker="*"
+    if [[ -d "$prefix" ]]; then
+      printf '%s %-24s %s\n' "$marker" "$name" "$dir"
+    else
+      printf '%s %-24s %s (not installed)\n' "$marker" "$name" "$dir"
+    fi
+  done
+  [[ $found -eq 1 ]] || echo "No environments in $PIXI_ENV_HOME"
+}
+
+cmd_path() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  if [[ -n "$PARSED_NAME" ]]; then
+    [[ $# -eq 0 ]] || die "usage: pixi-env path [-n <name>]"
+    env_dir "$PARSED_NAME"
+  elif [[ $# -eq 0 ]]; then
+    printf '%s\n' "$PIXI_ENV_HOME"
+  else
+    die "usage: pixi-env path [-n <name>]"
+  fi
+}
+
+emit_activate() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  [[ -n "$PARSED_NAME" && $# -eq 0 ]] || die "usage: pixi-env activate -n <name>"
+  local name="$PARSED_NAME"
+  need_pixi
+  local dir prefix
+  ensure_env_exists "$name"
+  dir="$(env_dir "$name")"
+  pixi install --manifest-path "$dir/pixi.toml" >/dev/null
+  prefix="$(env_prefix_for_dir "$dir")"
+  [[ -d "$prefix" ]] || die "pixi environment prefix not found: $prefix"
+  mkdir -p "$prefix/bin"
+  cat <<EOF
+if [ -z "\${PIXI_ENV_ACTIVE_ENV+x}" ]; then
+  export PIXI_ENV_OLD_PATH="\${PATH}"
+
+  if [ -n "\${CONDA_PREFIX+x}" ]; then export PIXI_ENV_OLD_CONDA_PREFIX="\${CONDA_PREFIX}"; export PIXI_ENV_OLD_CONDA_PREFIX_SET=1; else unset PIXI_ENV_OLD_CONDA_PREFIX; export PIXI_ENV_OLD_CONDA_PREFIX_SET=0; fi
+  if [ -n "\${CONDA_DEFAULT_ENV+x}" ]; then export PIXI_ENV_OLD_CONDA_DEFAULT_ENV="\${CONDA_DEFAULT_ENV}"; export PIXI_ENV_OLD_CONDA_DEFAULT_ENV_SET=1; else unset PIXI_ENV_OLD_CONDA_DEFAULT_ENV; export PIXI_ENV_OLD_CONDA_DEFAULT_ENV_SET=0; fi
+  if [ -n "\${CONDA_PROMPT_MODIFIER+x}" ]; then export PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER="\${CONDA_PROMPT_MODIFIER}"; export PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER_SET=1; else unset PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER; export PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER_SET=0; fi
+  if [ -n "\${CONDA_SHLVL+x}" ]; then export PIXI_ENV_OLD_CONDA_SHLVL="\${CONDA_SHLVL}"; export PIXI_ENV_OLD_CONDA_SHLVL_SET=1; else unset PIXI_ENV_OLD_CONDA_SHLVL; export PIXI_ENV_OLD_CONDA_SHLVL_SET=0; fi
+fi
+export PIXI_ENV_ACTIVE_ENV="$name"
+export PIXI_ENV_ACTIVE_ENV_DIR="$dir"
+export PIXI_ENV_ACTIVE_PREFIX="$prefix"
+export PATH="$prefix/bin:\${PIXI_ENV_OLD_PATH:-\$PATH}"
+export CONDA_PREFIX="$prefix"
+export CONDA_DEFAULT_ENV="$name"
+export CONDA_PROMPT_MODIFIER="($name) "
+export CONDA_SHLVL="\$((\${PIXI_ENV_OLD_CONDA_SHLVL:-0} + 1))"
+hash -r 2>/dev/null || true
+rehash 2>/dev/null || true
+EOF
+}
+
+emit_deactivate() {
+  cat <<'EOF'
+if [ -n "${PIXI_ENV_ACTIVE_ENV+x}" ]; then
+  if [ -n "${PIXI_ENV_OLD_PATH+x}" ]; then
+    export PATH="${PIXI_ENV_OLD_PATH}"
+    unset PIXI_ENV_OLD_PATH
+  fi
+
+  if [ "${PIXI_ENV_OLD_CONDA_PREFIX_SET:-0}" = 1 ]; then export CONDA_PREFIX="${PIXI_ENV_OLD_CONDA_PREFIX}"; else unset CONDA_PREFIX; fi
+  if [ "${PIXI_ENV_OLD_CONDA_DEFAULT_ENV_SET:-0}" = 1 ]; then export CONDA_DEFAULT_ENV="${PIXI_ENV_OLD_CONDA_DEFAULT_ENV}"; else unset CONDA_DEFAULT_ENV; fi
+  if [ "${PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER_SET:-0}" = 1 ]; then export CONDA_PROMPT_MODIFIER="${PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER}"; else unset CONDA_PROMPT_MODIFIER; fi
+  if [ "${PIXI_ENV_OLD_CONDA_SHLVL_SET:-0}" = 1 ]; then export CONDA_SHLVL="${PIXI_ENV_OLD_CONDA_SHLVL}"; else unset CONDA_SHLVL; fi
+
+  unset PIXI_ENV_ACTIVE_ENV PIXI_ENV_ACTIVE_ENV_DIR PIXI_ENV_ACTIVE_PREFIX
+  unset PIXI_ENV_OLD_CONDA_PREFIX PIXI_ENV_OLD_CONDA_PREFIX_SET
+  unset PIXI_ENV_OLD_CONDA_DEFAULT_ENV PIXI_ENV_OLD_CONDA_DEFAULT_ENV_SET
+  unset PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER PIXI_ENV_OLD_CONDA_PROMPT_MODIFIER_SET
+  unset PIXI_ENV_OLD_CONDA_SHLVL PIXI_ENV_OLD_CONDA_SHLVL_SET
+  hash -r 2>/dev/null || true
+  rehash 2>/dev/null || true
+fi
+EOF
+}
+
+cmd_activate_standalone() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  [[ -n "$PARSED_NAME" && $# -eq 0 ]] || die "usage: pixi-env activate -n <name>"
+  local name="$PARSED_NAME"
+  cat >&2 <<EOF
+pixi-env activate must be evaluated by your shell.
+
+One-time setup for bash/zsh:
+  eval "\$(pixi-env shell-init)"
+
+Then run:
+  pixi-env activate -n $name
+EOF
+}
+
+cmd_deactivate_standalone() {
+  cat >&2 <<'EOF'
+pixi-env deactivate must be evaluated by your shell.
+
+One-time setup for bash/zsh:
+  eval "$(pixi-env shell-init)"
+EOF
+}
+
+cmd_run() {
+  parse_name_flag "$@"
+  set -- ${PARSED_ARGS[@]+"${PARSED_ARGS[@]}"}
+  need_pixi
+  [[ -n "$PARSED_NAME" ]] || die "usage: pixi-env run -n <name> -- <command> [args]"
+  local name="$PARSED_NAME"
+  [[ $# -ge 2 && "$1" == "--" ]] || die "usage: pixi-env run -n <name> -- <command> [args]"
+  shift
+  ensure_env_exists "$name"
+  pixi run --manifest-path "$(manifest_for "$name")" "$@"
+}
+
+cmd_shell_init() {
+  local pixi_env_bin
+  if [[ "$0" == */* ]]; then
+    pixi_env_bin="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  else
+    pixi_env_bin="$(command -v "$0")"
+  fi
+  cat <<EOF
+pixi-env() {
+  local _pixi_env_cmd="\${1:-}"
+  if [ "\$#" -gt 0 ]; then shift; fi
+  case "\$_pixi_env_cmd" in
+    activate)
+      eval "\$("$pixi_env_bin" __activate "\$@")"
+      ;;
+    deactivate)
+      eval "\$("$pixi_env_bin" __deactivate)"
+      ;;
+    "")
+      "$pixi_env_bin"
+      ;;
+    *)
+      "$pixi_env_bin" "\$_pixi_env_cmd" "\$@"
+      ;;
+  esac
+}
+
+pixi() {
+  if [ "\${1:-}" != "env" ]; then
+    command pixi "\$@"
+    return
+  fi
+
+  shift
+  local _pixi_env_cmd="\${1:-help}"
+  if [ "\$#" -gt 0 ]; then shift; fi
+  case "\$_pixi_env_cmd" in
+    create)
+      "$pixi_env_bin" create "\$@"
+      ;;
+    list)
+      "$pixi_env_bin" list "\$@"
+      ;;
+    activate)
+      eval "\$("$pixi_env_bin" __activate "\$@")"
+      ;;
+    deactivate)
+      eval "\$("$pixi_env_bin" __deactivate)"
+      ;;
+    add)
+      "$pixi_env_bin" add "\$@"
+      ;;
+    remove)
+      "$pixi_env_bin" remove "\$@"
+      ;;
+    path)
+      "$pixi_env_bin" path "\$@"
+      ;;
+    run)
+      "$pixi_env_bin" run "\$@"
+      ;;
+    help|-h|--help|"")
+      "$pixi_env_bin" help
+      ;;
+    *)
+      printf 'pixi env: unknown command %s\n' "\$_pixi_env_cmd" >&2
+      return 1
+      ;;
+  esac
+}
+EOF
+}
+
+main() {
+  local cmd="${1:-help}"
+  if [[ $# -gt 0 ]]; then shift; fi
+  case "$cmd" in
+    create) cmd_create "$@" ;;
+    add) cmd_add "$@" ;;
+    remove) cmd_remove "$@" ;;
+    list) cmd_list "$@" ;;
+    path) cmd_path "$@" ;;
+    activate) cmd_activate_standalone "$@" ;;
+    deactivate) cmd_deactivate_standalone "$@" ;;
+    run) cmd_run "$@" ;;
+    shell-init) cmd_shell_init "$@" ;;
+    __activate) emit_activate "$@" ;;
+    __deactivate) emit_deactivate "$@" ;;
+    help|-h|--help) usage ;;
+    version|--version) echo "pixi-env $PIXI_ENV_VERSION" ;;
+    *) die "unknown command '$cmd' (try: pixi-env help)" ;;
+  esac
+}
+
+main "$@"
