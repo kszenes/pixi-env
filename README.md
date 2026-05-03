@@ -44,25 +44,25 @@ Add that line to `~/.bashrc` or `~/.zshrc` to make it permanent.
 ## Usage
 
 ```sh
-pg create py311 python=3.11 numpy
-pg ls
-pg a py311
+pg create -n py311 python=3.11 numpy
+pg list
+pg activate -n py311
 python --version
-pg d
+pg deactivate
 ```
 
 More commands:
 
 ```sh
-pg list      # or: pg ls
-pg activate py311  # or: pg a py311
-pg deactivate      # or: pg d
-pg add pandas matplotlib      # adds to active env
-pg add py311 pandas matplotlib # explicit env
-pg run py311 -- python -c 'import numpy; print(numpy.__version__)'
-pg path          # prints the env root directory
-pg path py311    # prints one env directory
-pg remove py311
+pg list
+pg activate -n py311
+pg deactivate
+pg add pandas matplotlib          # adds to active env
+pg add -n py311 pandas matplotlib # explicit env
+pg run -n py311 -- python -c 'import numpy; print(numpy.__version__)'
+pg path           # prints the env root directory
+pg path -n py311  # prints one env directory
+pg remove -n py311
 ```
 
 ## Notes
