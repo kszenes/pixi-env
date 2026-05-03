@@ -1,6 +1,6 @@
 # pixi-global-env (`pg`)
 
-`pg` is a small wrapper that lets you use [pixi](https://pixi.sh) projects like global conda-style environments.
+`pg` is a small wrapper that lets you use [pixi](https://pixi.sh) projects like **global conda-style environments** and **syntax**.
 
 All environments are stored under one directory:
 
@@ -12,25 +12,7 @@ All environments are stored under one directory:
 Install with:
 
 ```sh
-curl -LsSf https://raw.githubusercontent.com/kszenes/pixi-global-env/main/install.sh | sh
-```
-
-Or from a local checkout:
-
-```sh
-./install.sh
-```
-
-The installer supports Linux and macOS. If `pixi` is not installed, it installs pixi with:
-
-```sh
-curl -fsSL https://pixi.sh/install.sh | sh
-```
-
-The installer copies `pg` to `~/.local/bin/pg` by default. Override with:
-
-```sh
-PG_INSTALL_DIR=/usr/local/bin ./install.sh
+curl -LsSf https://raw.githubusercontent.com/kszenes/pixi-global-env/refs/heads/master/install.sh | sh
 ```
 
 Then enable activation/deactivation in your shell (`bash` or `zsh`):
