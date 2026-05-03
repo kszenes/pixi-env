@@ -9,11 +9,28 @@ All environments are stored under one directory:
 
 ## Install
 
-Put `bin/pg` on your `PATH`, for example:
+Install with:
 
 ```sh
-mkdir -p ~/.local/bin
-cp bin/pg ~/.local/bin/pg
+curl -LsSf https://raw.githubusercontent.com/kszenes/pixi-global-env/main/install.sh | sh
+```
+
+Or from a local checkout:
+
+```sh
+./install.sh
+```
+
+The installer supports Linux and macOS. If `pixi` is not installed, it installs pixi with:
+
+```sh
+curl -fsSL https://pixi.sh/install.sh | sh
+```
+
+The installer copies `pg` to `~/.local/bin/pg` by default. Override with:
+
+```sh
+PG_INSTALL_DIR=/usr/local/bin ./install.sh
 ```
 
 Then enable activation/deactivation in your shell (`bash` or `zsh`):
