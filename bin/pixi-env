@@ -299,6 +299,16 @@ pixi-env() {
 
 pixi() {
   if [ "\${1:-}" != "env" ]; then
+    if [ "\${1:-}" = "add" ] && [ -n "\${PIXI_ENV_ACTIVE_ENV:-}" ]; then
+      shift
+      "$pixi_env_bin" add "\$@"
+      return
+    fi
+    if [ "\${1:-}" = "run" ] && [ -n "\${PIXI_ENV_ACTIVE_ENV:-}" ]; then
+      shift
+      "$pixi_env_bin" run "-n" "\$PIXI_ENV_ACTIVE_ENV" -- "\$@"
+      return
+    fi
     command pixi "\$@"
     return
   fi

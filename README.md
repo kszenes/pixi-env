@@ -36,7 +36,8 @@ pixi env deactivate
 More commands:
 
 ```sh
-pixi env add pandas matplotlib          # adds to active env
+pixi add pandas matplotlib              # adds to active pixi-env env
+pixi env add pandas matplotlib          # same as above
 pixi env add -n py311 pandas matplotlib # explicit env
 pixi env run -n py311 -- python -c 'import numpy; print(numpy.__version__)'
 pixi env path                           # prints the env root directory
