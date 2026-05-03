@@ -3,16 +3,16 @@ set -eu
 
 # Installer for pixi-env
 # Usage:
-#   curl -LsSf https://raw.githubusercontent.com/kszenes/pixi-global-env/main/install.sh | sh
+#   curl -LsSf https://raw.githubusercontent.com/kszenes/pixi-env/main/install.sh | sh
 #
 # Options via env vars:
 #   PIXI_ENV_INSTALL_DIR   Directory to install pixi-env into (default: ~/.local/bin)
-#   PIXI_ENV_REPO          GitHub repo owner/name (default: kszenes/pixi-global-env)
+#   PIXI_ENV_REPO          GitHub repo owner/name (default: kszenes/pixi-env)
 #   PIXI_ENV_REF           Git ref/tag/branch to install from (default: main)
 #   PIXI_ENV_BIN_URL       Direct URL to the pixi-env script (overrides repo/ref)
 
 PIXI_ENV_INSTALL_DIR="${PIXI_ENV_INSTALL_DIR:-$HOME/.local/bin}"
-PIXI_ENV_REPO="${PIXI_ENV_REPO:-kszenes/pixi-global-env}"
+PIXI_ENV_REPO="${PIXI_ENV_REPO:-kszenes/pixi-env}"
 PIXI_ENV_REF="${PIXI_ENV_REF:-main}"
 PIXI_ENV_BIN_URL="${PIXI_ENV_BIN_URL:-https://raw.githubusercontent.com/$PIXI_ENV_REPO/$PIXI_ENV_REF/bin/pixi-env}"
 PIXI_ENV_BIN="$PIXI_ENV_INSTALL_DIR/pixi-env"
@@ -104,15 +104,9 @@ esac
 
 info ""
 info "Initialize your shell so 'pixi env activate' can modify your current environment:"
-info "  eval \"\$(pixi-env shell-init)\""
-info ""
-info "To make this permanent, add it to your shell config:"
 info "  echo 'eval \"\$(pixi-env shell-init)\"' >> ~/.zshrc    # zsh"
 info "  echo 'eval \"\$(pixi-env shell-init)\"' >> ~/.bashrc   # bash"
 info ""
-info "Then restart your shell, or run this now:"
-info "  eval \"\$(pixi-env shell-init)\""
-info ""
 info "Then try:"
-info "  pixi env create -n qc python"
-info "  pixi env activate -n qc"
+info "  pixi env create -n myenv mkl"
+info "  pixi env activate -n myenv"
