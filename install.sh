@@ -13,7 +13,7 @@ set -eu
 
 PIXI_ENV_INSTALL_DIR="${PIXI_ENV_INSTALL_DIR:-$HOME/.local/bin}"
 PIXI_ENV_REPO="${PIXI_ENV_REPO:-kszenes/pixi-env}"
-PIXI_ENV_REF="${PIXI_ENV_REF:-main}"
+PIXI_ENV_REF="${PIXI_ENV_REF:-master}"
 PIXI_ENV_BIN_URL="${PIXI_ENV_BIN_URL:-https://raw.githubusercontent.com/$PIXI_ENV_REPO/$PIXI_ENV_REF/bin/pixi-env}"
 PIXI_ENV_BIN="$PIXI_ENV_INSTALL_DIR/pixi-env"
 
